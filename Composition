@@ -1,0 +1,73 @@
+function [TB,T,TBe] = Composition(PFA,Aobs,Euo)
+%Compute the parallel composition of PFA and DFA 
+%Aobs: the observer of an PFA
+%Euo: the unobservable events of PFA (row vector)
+%TB：the parallel composition of PFA and its DFA
+%TBe: the composition of Aobs and PFA
+%TBv: the Markov chain corresponding to PFA||G_o
+%TBa: the MC correponding to PFA||G_o with the state violating CO absorbing
+
+S1=unique(Aobs(:,1),'rows');  %the number of states in the observer
+nu=max(size(Euo));   %the number of unobservalbe events in the observer
+enum=max(PFA(:,2));    %the number of events in NFA
+for i=1:max(size(S1))     %Adding unobservable selp-loops to DFA
+    for j=1:nu
+        Aobs=[Aobs;i-1, Euo(j), i-1];
+    end
+end
+
+T=[{1} {[0 0]} {[]} {[]} {[0]}];
+c=cell2mat(T(:,5));
+d=find(c==0);
+
+while ~isempty(d)
+    MV=T{d(1),2};
+    a1=find(PFA(:,1)==MV(1));   
+    a2=find((Aobs(:,1)==MV(2)));   
+    for i=1:enum
+        b1=a1((PFA(a1,2)==i));   
+        b2=a2((Aobs(a2,2)==i));   
+        if ~isempty(b1)&&~isempty(b2)
+            e1=length(b1);    
+            e2=length(b2);   
+            for j=1:e1
+                for k=1:e2
+                    q1=PFA(b1,3);
+                    q2=Aobs(b2,3);
+                    M1=[q1(j),q2(k)];
+                    S=reshape(cell2mat(T(:,2)),[],2);
+                    numT=size(S,1);
+                    if isempty(intersect(S,M1,'rows'))  %the state is not in T
+                        T{numT+1,1}=numT+1;
+                        T{numT+1,2}=M1;        %add M1 to T
+                        T{numT+1,3}=[]; 
+                        T{numT+1,4}=[];
+                        T{numT+1,5}=0;
+                        T{d(1),3}=[T{d(1),3},i];
+                        T{d(1),4}=[T{d(1),4};M1];
+                    else
+                        T{d(1),3}=[T{d(1),3},i];
+                        T{d(1),4}=[T{d(1),4};M1];
+                    end
+                end
+            end     
+        end
+    end
+    T{d(1),5}=1;
+    c=cell2mat(T(:,5));
+    d=find(c==0);     %the index with each node without the tag
+end
+
+
+nd=length(T(:,1)); %the number of states in the composition
+TBe=[];
+for i=1:nd
+    for j=1:length(T{i,3})
+        TBe=[TBe; i, T{i,2}, T{i,3}(j) T{i,4}(j,:)];
+    end
+end
+TB=[];
+for i=1:nd
+    TB=[TB;T{i,2}];
+end
+end
