@@ -1,0 +1,128 @@
+function [Aobs,obs]=NFAtoDFA2(PFA,Euo,p0) 
+
+% PFA=[
+% 0 1 1 0.5;
+% 0 1 2 0.5;
+% 1 2 1 0.1;
+% 2 2 2 0.1;
+% 1 3 3 0.63;
+% 1 5 3 0.27;
+% 2 4 4 0.9;
+% 3 1 3 0.5;
+% 3 4 5 0.5;
+% 4 2 4 0.3;
+% 4 4 5 0.7;
+% 5 2 5 1];  
+% Euo=[1 2];
+% p0=[1 0 0 0 0 0];
+
+
+% PFA=[0 1 1 0.5;
+%0 1 2 0.5;
+%1 2 1 0.1;
+%2 2 2 0.1;
+%1 3 3 0.63;
+%1 5 3 0.27;
+%2 4 4 0.9;
+%3 1 3 0.5;
+%3 4 5 0.5;
+%4 2 4 0.3;
+%4 4 5 0.7;
+%5 2 5 1];   
+% the last column is the probability
+% Euo=[1 5]; row vector the unobservable events
+% the index of PFA is from 0;
+ini=find(p0>0);
+NFA1=PFA;
+NFA1(:,1)=NFA1(:,1)+1;
+NFA1(:,3)=NFA1(:,3)+1;
+snum=max(max(NFA1(:,1)),max(NFA1(:,3)));%the number of states in NFA 
+enum=max(NFA1(:,2));    %the number of events in NFA  
+
+b=0;
+
+obs=zeros(1,snum); 
+Aobs=[];
+for a=1:length(ini)
+    obs(ini(a))=1;
+end
+while 1
+    for i1=1:size(NFA1,1)
+        for i2=1:length(Euo)
+            if ismember(obs(NFA1(i1,1)),ini) && Euo(i2)==NFA1(i1,2) && obs(NFA1(i1,3))==0
+                obs(NFA1(i1,3))=1;
+                b=1;
+            end
+        end
+    end
+    if b==1
+        b=0;
+    else
+        break
+    end
+end
+a=1;
+while a<=size(obs,1)
+    for i1=1:enum
+        if NFA1(:,2)~=i1
+            continue
+        end
+        for i2=1:length(Euo)
+            if Euo(i2)==i1
+                b=1;
+                break
+            end
+        end
+        if b==1
+            b=0;
+            continue
+        end
+        est=zeros(1,snum);
+        for i2=1:snum
+            if obs(a,i2)==1
+                for i3=1:size(NFA1,1)
+                    if NFA1(i3,1)==i2 && NFA1(i3,2)==i1 && est(NFA1(i3,3))==0
+                        est(NFA1(i3,3))=1;
+                    end
+                end
+            end
+        end
+        if est==0
+            continue
+        end
+        while 1
+            for i2=1:size(NFA1,1)
+                for i3=1:length(Euo)
+                    if est(NFA1(i2,1))==1 && Euo(i3)==NFA1(i2,2) && est(NFA1(i2,3))==0
+                        est(NFA1(i2,3))=1;
+                        b=1;
+                    end
+                end
+            end
+            if b==1
+                b=0;
+            else
+                break
+            end
+        end
+        for i2=1:size(obs,1)
+            if est==obs(i2,:)
+                b=1;
+                break
+            end
+        end
+        if b==1
+            b=0;
+            Aobs=[Aobs;a,i1,i2];
+        else
+            obs=[obs;est];
+            Aobs=[Aobs;a,i1,size(obs,1)];
+        end
+    end
+    a=a+1;
+end
+Aobs(:,1)=Aobs(:,1)-1;
+Aobs(:,3)=Aobs(:,3)-1;
+end
+
+
