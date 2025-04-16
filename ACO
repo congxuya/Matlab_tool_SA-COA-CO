@@ -1,0 +1,85 @@
+function [TBv,TBa,x,flag] = ACO(PFA,Euo,CR,beta,p0,Eil,Prd)
+%PFA: the PFA
+%Euo: the set of unobservable events
+%Eil: the set of events w.r.t. intermittent loss of observations (col vec)
+%Prd: transition probability w.r.t ILOs (row vector)
+%p0: the initial probability distribution vector
+%CR: the set of critical states (column vector)
+%beta: the threshold
+
+%flag=1: the SDES is A-CO under intermittent loss of observations
+%flag=0: the SDES is not A-C0 under intermittent loss of observations
+
+a=size(PFA,1);   %the number of transitions in PFA
+aa=size(unique(PFA(:,2),'rows'),1); %the number of events in PFA
+PFAd=PFA;
+for i=1:size(Prd,1)
+    [~,b]=ismember(Prd(i,1:3),PFA(:,1:3),'rows');
+    PFAd(b,4)=Prd(i,4)*PFA(b,4);
+    [~,bb]=ismember(Prd(i,2),Eil,'rows');
+    PFAd(a+i,:)=[PFA(b,1), aa+bb, PFA(b,3),(1-Prd(i,4))*PFA(b,4)];
+    Euo=[Euo,aa+bb];
+end
+Euo=unique(Euo);
+
+[Aobs,obs]=NFAtoDFA2(PFAd,Euo,p0);
+[TB,~,TBe] = Composition(PFAd,Aobs,Euo);
+
+x=size(TBe,2); %the number of columns of TBe
+%y=size(unique(PFA(:,1)),1)  %the number of states in PFA
+CRN=setdiff(unique(PFAd(:,1)),CR);  %the set of non-cricial states
+[~,lib]=ismember(TBe(:,[2 4 5]),PFAd(:,1:3),'rows');
+for i=1:size(TBe)   %assign transitin probability to each row of TBe
+    TBe(i,x+1)=PFAd(lib(i),4);
+end
+
+obsn=ones(1,size(obs,1));   %obs(i)=0 the state in observer violates CO, obs(i)=1 the state in observer satisfies CO
+for i=1:size(obs,1)
+    z=(find(obs(i,:)==1)-1)';  %the set of states of PFA in each state of the observer
+    if ~isempty(intersect(z,CR,'rows'))&&~isempty(intersect(z,CRN,'rows'))
+        obsn(1,i)=0;
+    end
+end
+v=(find(obsn==0)-1)';  %the states in observer violating critical observability
+
+ve=find(ismember(TBe(:,3),v,'rows')==1);  %the states in PFA||Go that violates critical observability and its arcs
+ve1=unique(TBe(ve,1));   %the states in PFA||Go that violates critical observability
+[~,lib]=ismember(TBe(:,[5 6]),TB,'rows');
+TBv=[TBe(:,1),TBe(:,4),lib,TBe(:,7)];  %transform TBe to 4-tuple, last column is probability
+TBv2=[TBe(:,1),lib,TBe(:,7)]; 
+TBa=TBv2;   
+%TBv(ve,1)-TBv(ve,3)==0
+for i=1:size(ve,1)        %make the states in PFA||Go violating CO absorbing
+    TBa(ve(i),2)=TBa(ve(i),1);
+    TBa(ve(i),3)=1;
+end
+TBa=unique(TBa,"rows");
+
+y=size(unique(TBa(:,1)),1);   %the number of states in absorbing PFA||Go
+Aeq=eye(y);
+beq=zeros(y,1);
+lb=zeros(1,y);
+ub=Inf*ones(1,y);
+f=[1,zeros(1,y-1)];
+for i=1:y
+    if i~=ve1
+        Aeq(i,TBa(TBa(:,1)==i,2))=Aeq(i,TBa(TBa(:,1)==i,2))-TBa(TBa(:,1)==i,3)';
+    end
+end
+Aeq(all(Aeq==0,2),all(Aeq==0,2))=1;
+beq(ve1,1)=1;
+
+x=linprog(f,[],[],Aeq,beq,lb,ub,f);
+ini=find(p0>0);
+x0=TB(:,1)==ini;
+d=max(size(find(x0==1),1));
+s=0;
+for i=1:d
+    s=x((x0(i)))*p0(x0(i));
+end
+if s<beta
+    flag=1;
+else
+    flag=0;
+end
+end
